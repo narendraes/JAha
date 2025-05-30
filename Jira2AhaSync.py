@@ -41,6 +41,8 @@ class Config:
     update_description: bool = True
     update_attachments: bool = True
     dry_run: bool = False
+    test_run: bool = False
+    test_issue_limit: int = 3
     
     # Additional fields to sync (customize as needed)
     additional_field_mappings: Dict[str, str] = None
@@ -71,7 +73,7 @@ class JiraAhaSync:
         params = {
             'jql': jql,
             'fields': f'key,summary,description,attachment,{self.config.jira_aha_reference_field}',
-            'maxResults': 100  # Adjust as needed
+            'maxResults': self.config.test_issue_limit if self.config.test_run else 100
         }
         
         try:
@@ -80,6 +82,9 @@ class JiraAhaSync:
             
             data = response.json()
             issues = data.get('issues', [])
+            
+            if self.config.test_run:
+                logger.info(f"TEST RUN: Limiting to {len(issues)} issues (max {self.config.test_issue_limit})")
             
             logger.info(f"Found {len(issues)} Jira issues with Aha references")
             return issues
@@ -237,6 +242,9 @@ class JiraAhaSync:
         """Main synchronization process"""
         logger.info("Starting Jira-Aha synchronization")
         
+        if self.config.test_run:
+            logger.info(f"Running in TEST mode - processing max {self.config.test_issue_limit} issues")
+        
         if self.config.dry_run:
             logger.info("Running in DRY RUN mode - no changes will be made")
         
@@ -270,13 +278,40 @@ def load_config_from_env() -> Config:
         aha_api_key=os.getenv('AHA_API_KEY', ''),
         update_description=os.getenv('UPDATE_DESCRIPTION', 'true').lower() == 'true',
         update_attachments=os.getenv('UPDATE_ATTACHMENTS', 'true').lower() == 'true',
-        dry_run=os.getenv('DRY_RUN', 'false').lower() == 'true'
+        dry_run=os.getenv('DRY_RUN', 'false').lower() == 'true',
+        test_run=os.getenv('TEST_RUN', 'false').lower() == 'true',
+        test_issue_limit=int(os.getenv('TEST_ISSUE_LIMIT', '3'))
     )
 
 def main():
     """Main function"""
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Jira-Aha Synchronization Script')
+    parser.add_argument('--test', action='store_true', 
+                       help='Run in test mode (process limited number of issues)')
+    parser.add_argument('--test-limit', type=int, default=3, choices=range(1, 6),
+                       help='Number of issues to process in test mode (1-5, default: 3)')
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Run without making any changes')
+    parser.add_argument('--list-issues', action='store_true',
+                       help='List issues that would be processed and exit')
+    
+    args = parser.parse_args()
+    
     # Load configuration
     config = load_config_from_env()
+    
+    # Override config with command line arguments
+    if args.test:
+        config.test_run = True
+        config.test_issue_limit = args.test_limit
+        logger.info(f"Test mode enabled - will process max {config.test_issue_limit} issues")
+    
+    if args.dry_run:
+        config.dry_run = True
+        logger.info("Dry run mode enabled - no changes will be made")
     
     # Validate required configuration
     required_fields = [
@@ -293,8 +328,24 @@ def main():
             logger.error(f"  {field.upper()}")
         return
     
-    # Create and run sync
+    # Create sync instance
     sync = JiraAhaSync(config)
+    
+    # Handle list-issues command
+    if args.list_issues:
+        logger.info("Listing issues that would be processed:")
+        issues = sync.get_jira_issues()
+        if issues:
+            logger.info(f"Found {len(issues)} issues with Aha references:")
+            for i, issue in enumerate(issues, 1):
+                fields = issue['fields']
+                aha_ref = fields.get(config.jira_aha_reference_field, 'N/A')
+                logger.info(f"  {i}. {issue['key']}: {fields.get('summary', 'No summary')} (Aha: {aha_ref})")
+        else:
+            logger.info("No issues found with Aha references")
+        return
+    
+    # Run sync
     sync.run_sync()
 
 if __name__ == "__main__":
