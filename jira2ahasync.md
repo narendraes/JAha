@@ -64,3 +64,77 @@ You can extend the script by:
 - **Aha**: Requires API key (create at: Account Settings → API → Personal API Key)
 
 The script is designed to be run periodically (e.g., via cron job) to keep Jira and Aha synchronized. Make sure to test with `DRY_RUN=true` first to verify the configuration works correctly.
+
+I'll update the script to add a test run command that allows you to process only 1-5 issues for testing purposes.Perfect! I've updated the script to include comprehensive test run capabilities. Here are the new testing features:
+
+## Test Run Commands
+
+### 1. Basic Test Run (processes 3 issues by default)
+```bash
+python jira_aha_sync.py --test
+```
+
+### 2. Test Run with Custom Limit (1-5 issues)
+```bash
+python jira_aha_sync.py --test --test-limit 2    # Process only 2 issues
+python jira_aha_sync.py --test --test-limit 5    # Process up to 5 issues
+```
+
+### 3. Dry Run Test (no actual changes made)
+```bash
+python jira_aha_sync.py --test --dry-run         # Test mode + no changes
+python jira_aha_sync.py --test --test-limit 1 --dry-run  # 1 issue, no changes
+```
+
+### 4. List Issues Only (see what would be processed)
+```bash
+python jira_aha_sync.py --list-issues            # Show all matching issues
+python jira_aha_sync.py --test --list-issues     # Show limited test issues
+```
+
+## Environment Variable Options
+
+You can also control test mode via environment variables:
+
+```bash
+export TEST_RUN="true"
+export TEST_ISSUE_LIMIT="2"
+python jira_aha_sync.py
+```
+
+## Recommended Testing Workflow
+
+1. **First, list the issues to see what will be processed:**
+   ```bash
+   python jira_aha_sync.py --list-issues
+   ```
+
+2. **Run a safe test with 1 issue and dry-run:**
+   ```bash
+   python jira_aha_sync.py --test --test-limit 1 --dry-run
+   ```
+
+3. **If everything looks good, test with actual changes on 1 issue:**
+   ```bash
+   python jira_aha_sync.py --test --test-limit 1
+   ```
+
+4. **Gradually increase the test limit:**
+   ```bash
+   python jira_aha_sync.py --test --test-limit 3
+   ```
+
+5. **Finally, run the full sync:**
+   ```bash
+   python jira_aha_sync.py
+   ```
+
+## New Features Added
+
+- **Command line argument parsing** for flexible testing options
+- **Test mode limiting** to process only 1-5 issues
+- **Issue listing** to preview what will be processed
+- **Combined modes** (test + dry-run for maximum safety)
+- **Clear logging** to show when test mode is active
+
+This approach allows you to safely test the integration with a small number of issues before running it on your entire project!
